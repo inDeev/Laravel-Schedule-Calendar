@@ -18,12 +18,4 @@ class LaravelScheduleCalendarServiceProvider extends ServiceProvider
             ]);
         }
     }
-
-    /**
-     * Register application service
-     */
-    public function register()
-    {
-        
-    }
 }
