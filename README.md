@@ -11,6 +11,11 @@
 
 The Schedule Calendar command has been introduced to provide developers with a clear and insightful view of scheduled tasks within the Laravel application. This new functionality allows for a visual representation of task distribution throughout the day and week, offering a valuable perspective on load distribution.
 
+## Requirements
+
+- PHP 7.3 or higher
+- Laravel 8+
+
 ## Key Features
 
 - **Day and Week View:** Easily switch between day and week views to analyze scheduled tasks over different time frames.

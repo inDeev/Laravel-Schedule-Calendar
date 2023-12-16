@@ -43,41 +43,45 @@ class ScheduleCalendarCommand extends Command
     protected static $terminalWidthResolver;
 
     /**
-     * The number of hours per calendar line.
+     * @var int $hoursPerLine The number of hours per calendar line.
      */
-    protected int $hoursPerLine;
+    protected $hoursPerLine;
 
     /**
-     * The allowed number of hours per calendar line.
+     *
+     * @var array $allowedHoursPerLine The allowed number of hours per calendar line.
      */
-    protected array $allowedHoursPerLine = [1, 2, 3, 4, 6, 8, 12, 24];
+    protected $allowedHoursPerLine = [1, 2, 3, 4, 6, 8, 12, 24];
 
     /**
-     * The number of characters per one hour field.
+     * @var int $hourWidth The number of characters per one hour field.
      */
-    protected int $hourWidth;
+    protected $hourWidth;
 
     /**
-     * Real amount of minutes inside one displayed minute character.
+     * @var float $minutesPerField Real amount of minutes inside one displayed minute character.
      */
-    protected float $minutesPerField;
+    protected $minutesPerField;
 
     /**
-     * Display type of scheduled tasks (dot, count, list).
+     * @var string $display Display type of scheduled tasks (dot, count, list).
      */
-    protected string $display;
+    protected $display;
 
     /**
-     * List of symbols with associated command.
+     * @var array $commands List of symbols with associated command.
      */
-    protected array $commands;
+    protected $commands;
 
     /**
-     * List of scheduled tasks per datetime.
+     * @var array $scheduledTasks List of scheduled tasks per datetime.
      */
-    protected array $scheduledTasks = [];
+    protected $scheduledTasks = [];
 
-    protected array $printInfo = [
+    /**
+     * @var array $printInfo Information used to print to terminal.
+     */
+    protected $printInfo = [
         'max_commands' => 0,
         'max_lines' => 1,
         'used_symbols' => [],
@@ -137,15 +141,13 @@ class ScheduleCalendarCommand extends Command
             $this->error('Terminal width is too small. Hours per line adjusted to '.$this->hoursPerLine.'.');
         }
 
-        $start = match ($range) {
-            'week' => $date->copy()->startOfWeek(),
-            default => $date->copy()->startOfDay()
-        };
-
-        $end = match ($range) {
-            'week' => $date->copy()->endOfWeek(),
-            default => $date->copy()->endOfDay()
-        };
+        if ($range === 'week') {
+            $start = $date->copy()->startOfWeek();
+            $end = $date->copy()->endOfWeek();
+        } else {
+            $start = $date->copy()->startOfDay();
+            $end = $date->copy()->endOfDay();
+        }
 
         $period = new CarbonPeriod($start, '1 day', $end);
 
@@ -219,7 +221,7 @@ class ScheduleCalendarCommand extends Command
     /**
      * Attach command symbol to datetime.
      */
-    private function attachCommandToDatetime(string $dateString, string $hourString, int|string|null $key, string $commandSymbol): void
+    private function attachCommandToDatetime(string $dateString, string $hourString, string $key, string $commandSymbol): void
     {
         $this->scheduledTasks[$dateString][$hourString][$key]['symbols'][] = $commandSymbol;
         $symbolsCount = count($this->scheduledTasks[$dateString][$hourString][$key]['symbols']);
@@ -267,7 +269,10 @@ class ScheduleCalendarCommand extends Command
         if ($this->printInfo['max_commands'] === 0) {
             $this->line('<fg=red>Your Kernel.php looks empty, let\'s add some scheduled tasks!</>');
         } else {
-            // List legend
+            $colorStep = $this->printInfo['max_commands'] / 3;
+            $this->line('<options=bold;fg=bright-green>●</> - <= '.floor($colorStep).' tasks');
+            $this->line('<options=bold;fg=bright-yellow>●</> - <= '.floor($colorStep * 2).' tasks');
+            $this->line('<options=bold;fg=bright-red>●</> - <= '.floor($colorStep * 3).' tasks');
             if ($this->display === 'list') {
                 foreach ($this->commands as $symbol => $command) {
                     if (in_array($symbol, $this->printInfo['used_symbols'], true)) {
@@ -275,13 +280,6 @@ class ScheduleCalendarCommand extends Command
                     }
                 }
                 $this->line('');
-            }
-            // Dot legend
-            if (in_array($this->display, ['dot', 'count'], true)) {
-                $colorStep = $this->printInfo['max_commands'] / 3;
-                $this->line('<options=bold;fg=bright-green>●</> - <= '.floor($colorStep).' tasks');
-                $this->line('<options=bold;fg=bright-yellow>●</> - <= '.floor($colorStep * 2).' tasks');
-                $this->line('<options=bold;fg=bright-red>●</> - <= '.floor($colorStep * 3).' tasks');
             }
         }
 
@@ -304,12 +302,15 @@ class ScheduleCalendarCommand extends Command
                             ->toDateTimeString();
                         $scheduledTask = $this->scheduledTasks[$dayString][$hours][$fieldStart] ?? [];
                         $style = $this->getColorBasedOnMaxTasks($scheduledTask);
-                        $minutesFieldCharacter = match ($this->display) {
-                            'dot' => !empty($scheduledTask['symbols']) ? ['value' => '●', 'style' => $style] : ['value' => '⎯'],
-                            'count' => !empty($scheduledTask['symbols']) ? ['value' => count($scheduledTask['symbols']), 'style' => $style] : ['value' => '⎯'],
-                            'list' => !empty($scheduledTask['symbols']) ? ['value' => implode('', $scheduledTask['symbols']), 'style' => $style] : ['value' => '⎯'],
-                            default => ['value' => '⎯'],
-                        };
+
+                        if ($this->display === 'count') {
+                            $minutesFieldCharacter = !empty($scheduledTask['symbols']) ? ['value' => count($scheduledTask['symbols']), 'style' => $style] : ['value' => '⎯'];
+                        } elseif ($this->display === 'list') {
+                            $minutesFieldCharacter = !empty($scheduledTask['symbols']) ? ['value' => implode('', $scheduledTask['symbols']), 'style' => $style] : ['value' => '⎯'];
+                        } else {
+                            $minutesFieldCharacter = !empty($scheduledTask['symbols']) ? ['value' => '●', 'style' => $style] : ['value' => '⎯'];
+                        }
+
                         $linesArray[0][] = $minutesFieldCharacter;
                     }
                 }
@@ -345,16 +346,24 @@ class ScheduleCalendarCommand extends Command
     /**
      * Get color based on max tasks.
      */
-    private function getColorBasedOnMaxTasks(mixed $scheduledTask): string
+    private function getColorBasedOnMaxTasks(array $scheduledTask): string
     {
         $colorStep = $this->printInfo['max_commands'] / 3;
         $scheduledTaskSymbolsCount = count($scheduledTask['symbols'] ?? []);
-        return match (true) {
-            $scheduledTaskSymbolsCount <= $colorStep => '<options=bold;fg=bright-green>',
-            $scheduledTaskSymbolsCount <= $colorStep * 2 => '<options=bold;fg=bright-yellow>',
-            $scheduledTaskSymbolsCount <= $colorStep * 3 => '<options=bold;fg=bright-red>',
-            default => 'white',
-        };
+
+        if ($scheduledTaskSymbolsCount <= $colorStep) {
+            return '<options=bold;fg=bright-green>';
+        }
+
+        if ($scheduledTaskSymbolsCount <= $colorStep * 2) {
+            return '<options=bold;fg=bright-yellow>';
+        }
+
+        if ($scheduledTaskSymbolsCount <= $colorStep * 3) {
+            return '<options=bold;fg=bright-red>';
+        }
+
+        return 'white';
     }
 
     /**
