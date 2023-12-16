@@ -68,6 +68,17 @@ class ScheduleCalendarCommand extends Command
     protected array $commands;
 
     /**
+     * List of scheduled tasks per datetime.
+     */
+    protected array $scheduledTasks = [];
+
+    protected array $printInfo = [
+        'max_commands' => 0,
+        'max_lines' => 1,
+        'used_symbols' => [],
+    ];
+
+    /**
      * Execute the console command.
      *
      * @param  Schedule  $schedule
@@ -129,19 +140,18 @@ class ScheduleCalendarCommand extends Command
 
         $period = new CarbonPeriod($start, '1 day', $end);
 
-        $defaultArray = $this->prepareDatetimeArray($period);
+        $this->prepareDatetimeArray($period);
 
-        $scheduledTasks = $this->mapTasks($schedule, $defaultArray, $start, $end);
+        $this->mapTasks($schedule, $start, $end);
 
-        $this->printCalendar($scheduledTasks, $period);
+        $this->printCalendar($period);
     }
 
     /**
      * Prepare array of datetime for calendar.
      */
-    private function prepareDatetimeArray(CarbonPeriod $period): array
+    private function prepareDatetimeArray(CarbonPeriod $period): void
     {
-        $array = [];
         /** @var Carbon $day */
         foreach ($period as $day) {
             for ($hour = 0; $hour < 24; $hour++) {
@@ -150,66 +160,120 @@ class ScheduleCalendarCommand extends Command
                         ->addHours($hour)
                         ->addMinutes($minutes * (int) $this->minutesPerField)
                         ->addSeconds($minutes * (int) (60 * ($this->minutesPerField - (int) $this->minutesPerField)));
-                    $array[$day->toDateString()][$hour][$fieldStart->toDateTimeString()] = [];
+                    $this->scheduledTasks[$day->toDateString()][$hour][$fieldStart->toDateTimeString()] = [];
                 }
             }
         }
-        return $array;
     }
 
     /**
      * Map scheduled tasks to datetime array.
      * @throws Exception
      */
-    private function mapTasks(Schedule $schedule, array $defaultArray, Carbon $start, Carbon $end): array
+    private function mapTasks(Schedule $schedule, Carbon $start, Carbon $end): void
     {
         $events = collect($schedule->events());
 
-        $symbols = array_merge(range('a', 'z'), range('A', 'Z'), range(0, 9));
-
-        for ($i = 0, $iMax = count($events); $i < $iMax; $i++) {
+        foreach ($events as $i => $event) {
+            $commandSymbol = $this->generateSymbol($i);
             $command = str_replace([Application::phpBinary(), Application::artisanBinary()], [
                 'php',
                 preg_replace("#['\"]#", '', Application::artisanBinary()),
-            ], $events[$i]->command);
-            $this->commands[$symbols[$i]] = $command;
+            ], $event->command);
+            $this->commands[$commandSymbol] = $command;
 
-            $cronExpression = new CronExpression($events[$i]->expression);
+            $cronExpression = new CronExpression($event->expression);
 
             $nextRunDate = $cronExpression->getNextRunDate($start, 0, true);
             while ($nextRunDate <= $end) {
                 $dateString = $nextRunDate->format('Y-m-d');
                 $hourString = $nextRunDate->format('G');
-                $prevKey = key($defaultArray[$dateString][$hourString]);
-                end($defaultArray[$dateString][$hourString]);
-                $lastKey = key($defaultArray[$dateString][$hourString]);
-                foreach ($defaultArray[$dateString][$hourString] as $key => $value) {
+                $prevKey = key($this->scheduledTasks[$dateString][$hourString]);
+                end($this->scheduledTasks[$dateString][$hourString]);
+                $lastKey = key($this->scheduledTasks[$dateString][$hourString]);
+                foreach ($this->scheduledTasks[$dateString][$hourString] as $key => $value) {
                     if (new DateTime($key) > $nextRunDate) {
-                        $defaultArray[$dateString][$hourString][$prevKey]['symbols'][] = $symbols[$i];
+                        $this->attachCommandToDatetime($dateString, $hourString, $prevKey, $commandSymbol);
                         break;
                     }
                     $prevKey = $key;
                 }
                 if ($prevKey === $lastKey) {
-                    $defaultArray[$dateString][$hourString][$prevKey]['symbols'][] = $symbols[$i];
+                    $this->attachCommandToDatetime($dateString, $hourString, $prevKey, $commandSymbol);
                 }
                 $nextRunDate = Carbon::parse($cronExpression->getNextRunDate($nextRunDate, 1, true));
             }
         }
-        return $defaultArray;
+        $this->printInfo['used_symbols'] = array_unique($this->printInfo['used_symbols']);
+    }
+
+    /**
+     * Attach command symbol to datetime.
+     */
+    private function attachCommandToDatetime(string $dateString, string $hourString, int|string|null $key, string $commandSymbol): void
+    {
+        $this->scheduledTasks[$dateString][$hourString][$key]['symbols'][] = $commandSymbol;
+        $symbolsCount = count($this->scheduledTasks[$dateString][$hourString][$key]['symbols']);
+        $this->printInfo['max_commands'] = max($this->printInfo['max_commands'], $symbolsCount);
+        $this->printInfo['used_symbols'][] = $commandSymbol;
+        if ($this->display !== 'dot') {
+            $this->printInfo['max_lines'] = $this->display === 'count'
+                ? max($this->printInfo['max_lines'], strlen((string) $symbolsCount))
+                : max($this->printInfo['max_lines'], $symbolsCount);
+        }
+    }
+
+    /**
+     * Generate symbol for command by index.
+     */
+    private function generateSymbol(int $index): string
+    {
+        $numLowercase = 26;
+        $numUppercase = 26;
+        $numDigits = 10;
+
+        if ($index < $numLowercase) {
+            return chr(ord('a') + $index);
+        }
+
+        if ($index < $numLowercase + $numUppercase) {
+            return chr(ord('A') + ($index - $numLowercase));
+        }
+
+        if ($index < $numLowercase + $numUppercase + $numDigits) {
+            return (string) ($index - $numLowercase - $numUppercase);
+        }
+
+        $start = 0x2460; // Unicode point for ①
+
+        return html_entity_decode('&#'.($start + $index - 62).';', ENT_COMPAT, 'UTF-8');
     }
 
     /**
      * Print calendar.
      */
-    private function printCalendar(array $scheduledTasks, CarbonPeriod $days): void
+    private function printCalendar(CarbonPeriod $days): void
     {
-        if ($this->display === 'list') {
-            $this->line(str_pad('Legend', ($this->hourWidth * $this->hoursPerLine + 1), ' ', STR_PAD_BOTH), 'bg=blue;fg=bright-white');
-            foreach ($this->commands as $symbol => $command) {
-                $this->components->twoColumnDetail($command, '<fg=red>'.$symbol.'</>');
+        $this->line(str_pad('Legend', ($this->hourWidth * $this->hoursPerLine + 1), ' ', STR_PAD_BOTH), 'bg=blue;fg=bright-white');
+        if ($this->printInfo['max_commands'] === 0) {
+            $this->line('<fg=red>Your Kernel.php looks empty, let\'s add some scheduled tasks!</>');
+        } else {
+            // List legend
+            if ($this->display === 'list') {
+                foreach ($this->commands as $symbol => $command) {
+                    if (in_array($symbol, $this->printInfo['used_symbols'], true)) {
+                        $this->line('<fg=red>'.$symbol.'</> - '.$command);
+                    }
+                }
+                $this->line('');
             }
-            $this->line('');
+            // Dot legend
+            if (in_array($this->display, ['dot', 'count'], true)) {
+                $colorStep = $this->printInfo['max_commands'] / 3;
+                $this->line('<options=bold;fg=bright-green>●</> - <= '.floor($colorStep).' tasks');
+                $this->line('<options=bold;fg=bright-yellow>●</> - <= '.floor($colorStep * 2).' tasks');
+                $this->line('<options=bold;fg=bright-red>●</> - <= '.floor($colorStep * 3).' tasks');
+            }
         }
 
         /** @var Carbon $day */
@@ -218,11 +282,7 @@ class ScheduleCalendarCommand extends Command
             $this->line(str_pad($day->format('l Y-m-d'), ($this->hourWidth * $this->hoursPerLine + 1), ' ', STR_PAD_BOTH), 'bg=blue;fg=bright-white');
             $hour = today();
             for ($lines = 0, $totalLines = 24 / $this->hoursPerLine; $lines < $totalLines; $lines++) {
-                for ($hours = 0; $hours < $this->hoursPerLine; $hours++) {
-                    $this->output->write($hour->format('H:i'));
-                    $this->output->write(str_repeat(' ', $this->hourWidth - ($hours === 0 ? 7 : 5)));
-                    $hour = $hour->addHour();
-                }
+                $this->printHourLine($hour);
                 $this->output->newLine();
                 $linesArray = [];
                 for ($hours = $lines * $this->hoursPerLine, $maxHour = $lines * $this->hoursPerLine + $this->hoursPerLine; $hours < $maxHour; $hours++) {
@@ -233,28 +293,21 @@ class ScheduleCalendarCommand extends Command
                             ->addMinutes($minutes * (int) $this->minutesPerField)
                             ->addSeconds($minutes * (int) (60 * ($this->minutesPerField - (int) $this->minutesPerField)))
                             ->toDateTimeString();
-                        $scheduledTask = $scheduledTasks[$dayString][$hours][$fieldStart] ?? [];
+                        $scheduledTask = $this->scheduledTasks[$dayString][$hours][$fieldStart] ?? [];
+                        $style = $this->getColorBasedOnMaxTasks($scheduledTask);
                         $minutesFieldCharacter = match ($this->display) {
-                            'dot' => !empty($scheduledTask['symbols']) ? ['value' => '•', 'style' => '<fg=red>'] : ['value' => '-'],
-                            'count' => !empty($scheduledTask['symbols']) ? ['value' => count($scheduledTask['symbols']), 'style' => '<fg=red>'] : ['value' => '-'],
-                            'list' => !empty($scheduledTask['symbols']) ? ['value' => implode('', $scheduledTask['symbols']), 'style' => '<fg=red>'] : ['value' => '-'],
-                            default => ['value' => '-'],
+                            'dot' => !empty($scheduledTask['symbols']) ? ['value' => '●', 'style' => $style] : ['value' => '⎯'],
+                            'count' => !empty($scheduledTask['symbols']) ? ['value' => count($scheduledTask['symbols']), 'style' => $style] : ['value' => '⎯'],
+                            'list' => !empty($scheduledTask['symbols']) ? ['value' => implode('', $scheduledTask['symbols']), 'style' => $style] : ['value' => '⎯'],
+                            default => ['value' => '⎯'],
                         };
                         $linesArray[0][] = $minutesFieldCharacter;
                     }
                 }
                 $linesArray[0][] = ['value' => '|'];
 
-                $maxValueLength = 1;
-                if ($this->display !== 'dot') {
-                    foreach ($linesArray[0] as $record) {
-                        $length = strlen((string) $record['value']);
-                        $maxValueLength = max($length, $maxValueLength);
-                    }
-                }
-
                 foreach ($linesArray[0] as $key => $record) {
-                    for ($i = 0; $i < $maxValueLength; $i++) {
+                    for ($i = 0; $i < $this->printInfo['max_lines']; $i++) {
                         $styleStart = $record['style'] ?? '';
                         $styleEnd = $record['style'] ?? null ? '</>' : '';
                         $character = mb_strlen((string) $record['value']) > $i ? mb_substr((string) $record['value'], $i, 1) : ' ';
@@ -266,6 +319,33 @@ class ScheduleCalendarCommand extends Command
                 }
             }
         }
+    }
+
+    /**
+     * Print hour line.
+     */
+    private function printHourLine(Carbon $startHour): void
+    {
+        for ($hours = 0; $hours < $this->hoursPerLine; $hours++) {
+            $this->output->write($startHour->format('H:i'));
+            $this->output->write(str_repeat(' ', $this->hourWidth - ($hours === 0 ? 7 : 5)));
+            $startHour = $startHour->addHour();
+        }
+    }
+
+    /**
+     * Get color based on max tasks.
+     */
+    private function getColorBasedOnMaxTasks(mixed $scheduledTask): string
+    {
+        $colorStep = $this->printInfo['max_commands'] / 3;
+        $scheduledTaskSymbolsCount = count($scheduledTask['symbols'] ?? []);
+        return match (true) {
+            $scheduledTaskSymbolsCount <= $colorStep => '<options=bold;fg=bright-green>',
+            $scheduledTaskSymbolsCount <= $colorStep * 2 => '<options=bold;fg=bright-yellow>',
+            $scheduledTaskSymbolsCount <= $colorStep * 3 => '<options=bold;fg=bright-red>',
+            default => 'white',
+        };
     }
 
     /**
