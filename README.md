@@ -8,9 +8,11 @@
 ![Laravel Remote DB Sync](https://github.com/inDeev/Laravel-Schedule-Calendar/blob/main/img/LaravelScheduleCalendar.png)
 
 ## Overview
+
 The Schedule Calendar command has been introduced to provide developers with a clear and insightful view of scheduled tasks within the Laravel application. This new functionality allows for a visual representation of task distribution throughout the day and week, offering a valuable perspective on load distribution.
 
 ## Key Features
+
 - **Day and Week View:** Easily switch between day and week views to analyze scheduled tasks over different time frames.
 
 - **Load Distribution:** Gain insights into the distribution of scheduled tasks throughout the day, helping identify peak load periods and optimize task scheduling.
@@ -18,6 +20,7 @@ The Schedule Calendar command has been introduced to provide developers with a c
 - **Enhanced Debugging:** Use the calendar view as a debugging tool to identify potential conflicts or overlaps in scheduled tasks.
 
 ## Installation
+
 The Schedule Calendar command is available as a package on [Packagist](https://packagist.org/packages/indeev/laravel-schedule-calendar) and can be installed using [Composer](https://getcomposer.org/).
 
 ```bash
@@ -25,13 +28,14 @@ composer require indeev/laravel-schedule-calendar
 ```
 
 ## How to Use
+
 To leverage the power of Schedule Calendar, simply run the command in your Laravel application:
 
 ```bash
 php artisan schedule:calendar
 ```
 
-This will generate a visual representation of your scheduled tasks, providing a comprehensive overview of your application's task schedule. 
+This will generate a visual representation of your scheduled tasks, providing a comprehensive overview of your application's task schedule.
 
 ![Single day with counts](https://github.com/inDeev/Laravel-Schedule-Calendar/blob/main/img/single_day_count.png)
 
@@ -95,7 +99,14 @@ php artisan schedule:calendar --hoursPerLine=6
 
 ![Single day 6 hours](https://github.com/inDeev/Laravel-Schedule-Calendar/blob/main/img/single_day_6hourPerLine.png)
 
+```bash
+php artisan schedule:calendar --hoursPerLine=24
+```
+
+![Single day 24 hours](https://github.com/inDeev/Laravel-Schedule-Calendar/blob/main/img/single_day_24hourPerLine.png)
+
 ## Current Limitations
+
 Attaching symbols to display in list view. In current version, I'm attaching to each scheduled task symbols from range a-zA-Z0-9, so there is limitation to max 62 schedules. Any proposals how to select unique and easily recognizable symbols are welcomed.
 
 ## License

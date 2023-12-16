@@ -48,6 +48,11 @@ class ScheduleCalendarCommand extends Command
     protected int $hoursPerLine;
 
     /**
+     * The allowed number of hours per calendar line.
+     */
+    protected array $allowedHoursPerLine = [1, 2, 3, 4, 6, 8, 12, 24];
+
+    /**
      * The number of characters per one hour field.
      */
     protected int $hourWidth;
@@ -104,8 +109,8 @@ class ScheduleCalendarCommand extends Command
         }
 
         $hoursPerLine = $this->option('hoursPerLine');
-        if (!in_array($hoursPerLine, [1, 2, 3, 4, 6, 8, 12, 24], false)) {
-            $this->error('Hours per line must be one of 1, 2, 3, 4, 6, 8, 12, 24.');
+        if (!in_array($hoursPerLine, $this->allowedHoursPerLine, false)) {
+            $this->error('Hours per line must be one of '.implode(', ', $this->allowedHoursPerLine).'.');
             return;
         }
         $this->hoursPerLine = (int) $hoursPerLine;
@@ -121,11 +126,15 @@ class ScheduleCalendarCommand extends Command
 
         $this->hourWidth = (int) (($terminalWidth - 1) / $this->hoursPerLine);
         $this->minutesPerField = 60 / ($this->hourWidth - 1);
-        while ($this->hourWidth < 7) {
-            $this->hoursPerLine /= 2;
-            $this->error('Terminal width is too small. Hours per line adjusted to '.$this->hoursPerLine.'.');
+        $selectedIndex = array_search($this->hoursPerLine, $this->allowedHoursPerLine, true);
+        while ($this->hourWidth < 7 && $selectedIndex > 0) {
+            $this->hoursPerLine = $this->allowedHoursPerLine[$selectedIndex - 1];
             $this->hourWidth = (int) (($terminalWidth - 1) / $this->hoursPerLine);
             $this->minutesPerField = 60 / ($this->hourWidth - 1);
+            $selectedIndex = array_search($this->hoursPerLine, $this->allowedHoursPerLine, true);
+        }
+        if ($this->hoursPerLine !== (int) $this->option('hoursPerLine')) {
+            $this->error('Terminal width is too small. Hours per line adjusted to '.$this->hoursPerLine.'.');
         }
 
         $start = match ($range) {
