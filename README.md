@@ -105,10 +105,6 @@ php artisan schedule:calendar --hoursPerLine=24
 
 ![Single day 24 hours](https://github.com/inDeev/Laravel-Schedule-Calendar/blob/main/img/single_day_24hourPerLine.png)
 
-## Current Limitations
-
-Attaching symbols to display in list view. In current version, I'm attaching to each scheduled task symbols from range a-zA-Z0-9, so there is limitation to max 62 schedules. Any proposals how to select unique and easily recognizable symbols are welcomed.
-
 ## License
 
 The MIT License (MIT). Please see [License File](LICENSE.md) for more information.
