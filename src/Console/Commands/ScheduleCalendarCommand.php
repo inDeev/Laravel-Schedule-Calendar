@@ -10,6 +10,7 @@ use Exception;
 use Carbon\Carbon;
 use Cron\CronExpression;
 use Carbon\CarbonPeriod;
+use Carbon\CarbonInterface;
 use Illuminate\Console\Command;
 use Illuminate\Console\Application;
 use Symfony\Component\Console\Terminal;
@@ -181,7 +182,7 @@ class ScheduleCalendarCommand extends Command
      * Map scheduled tasks to datetime array.
      * @throws Exception
      */
-    private function mapTasks(Schedule $schedule, Carbon $start, Carbon $end): void
+    private function mapTasks(Schedule $schedule, CarbonInterface $start, CarbonInterface $end): void
     {
         $events = collect($schedule->events());
 
@@ -334,7 +335,7 @@ class ScheduleCalendarCommand extends Command
     /**
      * Print hour line.
      */
-    private function printHourLine(Carbon $startHour): void
+    private function printHourLine(CarbonInterface $startHour): void
     {
         for ($hours = 0; $hours < $this->hoursPerLine; $hours++) {
             $this->output->write($startHour->format('H:i'));
