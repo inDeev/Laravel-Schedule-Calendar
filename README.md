@@ -110,6 +110,15 @@ php artisan schedule:calendar --hoursPerLine=24
 
 ![Single day 24 hours](https://github.com/inDeev/Laravel-Schedule-Calendar/blob/main/img/single_day_24hourPerLine.png)
 
+## Contribution
+
+👋 Thank you for considering contributing to our project! We welcome contributions from the community to help make this project even better. Whether you're fixing a bug, improving documentation, or adding a new feature, your efforts are highly appreciated and will be credited.
+
+## Credits
+
+-   [Petr Kateřiňák](https://github.com/indeev)
+-   [Jarand](https://github.com/lokeland)
+
 ## License
 
 The MIT License (MIT). Please see [License File](LICENSE.md) for more information.
